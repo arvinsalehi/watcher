@@ -1,0 +1,41 @@
+version: '3.8'
+
+services:
+  # 1. The Redis Service
+  redis-server:
+    image: 'redis:7-alpine'
+    container_name: redis-server
+    ports:
+      # Expose to host for optional debugging with a Redis client
+      - '6379:6379'
+
+  # 2. The Mock API for logging failures
+  mock-api:
+    build: ./mock.api
+    container_name: mock-api
+    # No ports needed to the host, communication is internal
+
+  # 3. Your Rust Health Watcher Application
+  watcher:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: watcher
+    ports:
+      # Expose the healthcheck endpoint to the host
+      - '8080:8080'
+    depends_on:
+      # Ensures Redis and the mock API start before the watcher
+      - redis-server
+      - mock-api
+    environment:
+      # --- Configuration for the watcher ---
+      RUST_LOG: "info"
+      WATCHER_HOST: "0.0.0.0"
+      WATCHER_PORT: "8080"
+      # Use the service name for container-to-container communication
+      REDIS_URL: "redis://redis-server:6379/"
+      LOGGING_API_URL: "http://mock-api:5000/log-failure"
+      STALE_THRESHOLD_SECONDS: "30" # Set to 30 for the real test
+      CHECK_INTERVAL_SECONDS: "10"
+
